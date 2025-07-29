@@ -183,7 +183,7 @@ FFMPEG_PATH	ffmpeg	FFmpeg 実行パス
 | `FFMPEG_PATH`     | `ffmpeg` | FFmpeg 実行パス |
 
 
-♯## ストレージ切り替え
+### ストレージ切り替え
 ```bash
 # ローカルストレージ (デフォルト)
 STORAGE_TYPE=local
