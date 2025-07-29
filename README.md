@@ -173,7 +173,7 @@ OPENAI_API_KEY=sk-********************************
 # ---------- Dummy IDs (PoC 用) ----------
 DEFAULT_USER_ID=550e8400-e29b-41d4-a716-446655440000
 DEFAULT_COACH_ID=6ba7b810-9dad-11d1-80b4-00c04fd430c8
-
+```
 
 （参考）コードで参照済み（.env.sample 未記載）のキー
 FFMPEG_PATH	ffmpeg	FFmpeg 実行パス
@@ -182,9 +182,26 @@ FFMPEG_PATH	ffmpeg	FFmpeg 実行パス
 | `ALLOWED_ORIGINS` | `*`      | CORS 許可ドメイン |
 | `FFMPEG_PATH`     | `ffmpeg` | FFmpeg 実行パス |
 
+
+♯## ストレージ切り替え
+```bash
+# ローカルストレージ (デフォルト)
+STORAGE_TYPE=local
+LOCAL_STORAGE_PATH=./uploads
+
+# Azure Blob Storage
+STORAGE_TYPE=azure_blob
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
+AZURE_STORAGE_CONTAINER=golf-videos
 ```
+### データベース切り替え
+```bash
+# SQLite (開発用)
+DATABASE_URL=sqlite+aiosqlite:///./golf_coaching.db
 
-
+# Azure MySQL (本番用)
+DATABASE_URL=mysql+asyncmy://username:password@hostname:3306/database
+```
 
 ## ７．API エンドポイント
 
@@ -206,29 +223,8 @@ FFMPEG_PATH	ffmpeg	FFmpeg 実行パス
 - `GET /api/v1/video/{video_id}/with-sections` - セクション付き動画取得
 - `GET /api/v1/video/{video_id}/feedback-summary` - フィードバック要約
 
-## ８．設定オプション
 
-### ストレージ切り替え
-```bash
-# ローカルストレージ (デフォルト)
-STORAGE_TYPE=local
-LOCAL_STORAGE_PATH=./uploads
-
-# Azure Blob Storage
-STORAGE_TYPE=azure_blob
-AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
-AZURE_STORAGE_CONTAINER=golf-videos
-```
-
-### データベース切り替え
-```bash
-# SQLite (開発用)
-DATABASE_URL=sqlite+aiosqlite:///./golf_coaching.db
-
-# Azure MySQL (本番用)
-DATABASE_URL=mysql+asyncmy://username:password@hostname:3306/database
-```
-##　１０．アプリケーション起動
+## ８．アプリケーション起動
 
 #### バックエンド（FastAPI）
 
@@ -247,6 +243,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # → API      : http://localhost:8000
 # → Swagger  : http://localhost:8000/docs
+```
 
 #### 3.2 フロントエンド（Next.js）
 
@@ -265,7 +262,7 @@ npm run dev
 - **フロントエンド**: http://localhost:3000
 - **バックエンドAPI**: http://localhost:8000
 - **APIドキュメント**: http://localhost:8000/docs
-- **Nginx (本番用)**: http://localhost
+
 ## ９．テスト実行
 
 ```bash
@@ -278,7 +275,7 @@ cd frontend
 npm run lint
 ```
 
-## １１．今後の拡張について
+## １０．今後の拡張について
 
 | 機能 | 推奨アーキテクチャ | 補足 |
 |------|------------------|------|
