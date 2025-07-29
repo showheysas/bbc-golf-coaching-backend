@@ -3,24 +3,38 @@
 ゴルフスイング動画に対するコーチング用フィードバック管理アプリです。  
 ユーザーが動画をアップロード → コーチがシーンごとにマークアップして音声コメント → ユーザーが結果を閲覧する流れをサポートします。
 
-## 🏗️ 技術構成
+## １．主要機能
 
-### バックエンド
-- **FastAPI** + **SQLAlchemy** (非同期対応)
-- **SQLite** (開発用) / **Azure MySQL** (本番用)対応
-- **OpenAI API** (Whisper文字起こし + GPT要約)
-- **Azure Blob Storage** / **ローカルストレージ** 切り替え可能
+### ユーザー機能
+1. **動画アップロード** - ドラッグ&ドロップ対応
+2. **クラブ・スイング種類選択** - ドロップダウンメニュー
+3. **フィードバック閲覧** - セクション別表示
+4. **動画検索・フィルタ** - クラブ種類・フィードバック有無で絞込
 
-### フロントエンド
-- **Next.js** + **TypeScript**
-- **Tailwind CSS**
-- **Axios** (API通信)
+### コーチ機能
+1. **セクション分割** - 時間指定でスイングを分割
+2. **マークアップ画像** - 視覚的な指導画像追加
+3. **音声コメント** - Whisperで自動文字起こし
+4. **AI要約** - GPTによる自動要約生成
+5. **タグ付け** - 12段階スイングフェーズの自動判定
 
-### インフラ
-- **Docker** + **docker-compose**
-- **Nginx** (プロダクション用プロキシ)
+## ２．技術スタック
 
-## 📁 プロジェクト構造
+| カテゴリ | 採用ライブラリ／ツール | 主な用途 |
+|----------|----------------------|----------|
+| **バックエンド** | FastAPI / Pydantic / SQLAlchemy (async) | REST / DTO / ORM |
+|  | python‑dotenv | `.env` 読み込み |
+|  | azure‑storage‑blob | Blob 操作・SAS URL 発行 |
+|  | **FFmpeg + subprocess.run** | 動画 → サムネイル & 静止画キャプチャ |
+|  | OpenAI Whisper / GPT‑4o | 音声テキスト化／要約 |
+| **スライダーバー & フレームキャプチャ** | HTML `<input type="range">` + `<video>` の `currentTime`<br>Canvas 2D API (`drawImage` → `canvas.toBlob`) | 任意フレームを即時キャプチャし画像生成 |
+| **フロント PoC** | Next.js 14 / React 18 / TailwindCSS | UI 実装 |
+|  | Axios | API 呼び出し |
+| **CI / Dev** | Docker / docker‑compose | ローカル統合／本番ビルド |
+|  | Ruff / Black | Lint／整形 |
+|  | Pytest | 単体テスト |
+
+## ３．プロジェクト構造
 
 ```
 ├── backend/
@@ -55,51 +69,76 @@
 └── README.md
 ```
 
-## 🗄️ データベーステーブル
+## ４．データベーステーブル
 
-### 1. videos (動画情報)
-| カラム | データ型 | 説明 |
-|-------|---------|-----|
-| video_id | UUID | 動画ID (主キー) |
-| user_id | UUID | アップロードユーザーID |
-| video_url | TEXT | 動画ファイルURL |
-| thumbnail_url | TEXT | サムネイル画像URL |
-| club_type | VARCHAR(50) | 使用クラブ種類 |
-| swing_form | VARCHAR(50) | スイング種類 |
-| swing_note | TEXT | ユーザーメモ |
-| section_group_id | UUID | セクショングループID |
+### 1. videos（動画情報）
+| カラム名 | データ型 | Not Null | 説明 |
+|---------|---------|----------|------|
+| `video_id`          | `UUID`      | ✅ | 動画ID (PK) |
+| `user_id`           | `UUID`      | ✅ | アップロードユーザーID |
+| `video_url`         | `TEXT`      | ✅ | 動画ファイルURL |
+| `thumbnail_url`     | `TEXT`      |  | サムネイル画像URL |
+| `club_type`         | `VARCHAR(50)` |  | 使用クラブ種類 |
+| `swing_form`        | `VARCHAR(50)` |  | スイング種類 |
+| `swing_note`        | `TEXT`      |  | ユーザーメモ |
+| `created_at`        | `DATETIME`  | ✅ | レコード作成日時 |
+| `updated_at`        | `DATETIME`  | ✅ | レコード更新日時 |
 
-### 2. section_groups (セクショングループ)
-| カラム | データ型 | 説明 |
-|-------|---------|-----|
-| section_group_id | UUID | グループID (主キー) |
-| video_id | UUID | 対応動画ID |
+---
 
-### 3. swing_sections (スイングセクション)
-| カラム | データ型 | 説明 |
-|-------|---------|-----|
-| section_id | UUID | セクションID (主キー) |
-| section_group_id | UUID | 親グループID |
-| start_sec | DECIMAL | 開始秒数 |
-| end_sec | DECIMAL | 終了秒数 |
-| image_url | TEXT | マークアップ画像URL |
-| tags | JSON | 自動タグ配列 |
-| markup_json | JSON | 描画オブジェクト |
-| coach_comment | TEXT | コーチコメント全文 |
-| coach_comment_summary | TEXT | AI要約コメント |
+### 2. section_groups（セクショングループ = 動画1本に1行）
+| カラム名 | データ型 | Not Null | 説明 |
+|---------|---------|----------|------|
+| `section_group_id`          | `UUID`     | ✅ | グループID (PK) |
+| `video_id`                  | `UUID`     | ✅ | 対応動画ID（videos.video_id 参照） |
+| `overall_feedback`          | `TEXT`     |  | コーチ総合コメント全文 |
+| `overall_feedback_summary`  | `TEXT`     |  | GPT 要約 (300〜500字) |
+| `next_training_menu`        | `TEXT`     |  | 推奨ドリル／練習メニュー全文 |
+| `next_training_menu_summary`| `TEXT`     |  | 練習メニュー要約 |
+| `feedback_created_at`       | `DATETIME` |  | 音声→要約が完了した時刻 |
+| `created_at`                | `DATETIME` | ✅ | レコード作成日時 |
+| `updated_at`                | `DATETIME` | ✅ | レコード更新日時 |
 
-### 4. coaching_reservation (コーチング予約)
-| カラム | データ型 | 説明 |
-|-------|---------|-----|
-| session_id | UUID | セッションID (主キー) |
-| user_id | UUID | ユーザーID |
-| coach_id | UUID | コーチID |
-| session_date | DATETIME | セッション日時 |
-| location_type | ENUM | 場所種類 (simulation_golf/real_golf_course) |
-| status | ENUM | 予約ステータス |
-| price | DECIMAL | 料金 |
+---
 
-## 🏷️ スイング12段階タグ
+### 3. swing_sections（スイングセクション）
+| カラム名 | データ型 | Not Null | 説明 |
+|---------|---------|----------|------|
+| `section_id`             | `UUID`       | ✅ | セクションID (PK) |
+| `section_group_id`       | `UUID`       | ✅ | 親グループID（section_groups.section_group_id 参照） |
+| `start_sec`              | `DECIMAL(6,2)` | ✅ | 開始秒数 |
+| `end_sec`                | `DECIMAL(6,2)` | ✅ | 終了秒数 |
+| `image_url`              | `TEXT`       |  | マークアップ画像URL |
+| `tags`                   | `JSON`       |  | 12段階スイングタグ配列 |
+| `markup_json`            | `JSON`       |  | 円・線など描画オブジェクト |
+| `coach_comment`          | `TEXT`       |  | コーチコメント全文 |
+| `coach_comment_summary`  | `TEXT`       |  | GPT 要約コメント |
+| `created_at`             | `DATETIME`   | ✅ | レコード作成日時 |
+| `updated_at`             | `DATETIME`   | ✅ | レコード更新日時 |
+
+---
+
+### 4. coaching_reservation（コーチング予約）
+| カラム名 | データ型 | Not Null | 説明 |
+|---------|---------|----------|------|
+| `session_id`   | `UUID`      | ✅ | セッションID (PK) |
+| `user_id`      | `UUID`      | ✅ | ユーザーID |
+| `coach_id`     | `UUID`      | ✅ | コーチID |
+| `session_date` | `DATETIME`  | ✅ | セッション日時 |
+| `location_type`| `ENUM('simulation_golf','real_golf_course')` | ✅ | 場所種類 |
+| `status`       | `ENUM('reserved','completed','cancelled')` | ✅ | 予約ステータス |
+| `price`        | `DECIMAL(10,2)` |  | 料金 |
+| `created_at`   | `DATETIME`  | ✅ | レコード作成日時 |
+| `updated_at`   | `DATETIME`  | ✅ | レコード更新日時 |
+
+---
+
+> **備考**  
+> - 現状の業務ドメインでは上記4テーブルで完結しており、他に隠れたテーブルはありません。  
+> - `created_at` / `updated_at` はトリガーではなくアプリケーション側（SQLAlchemy）で自動セットしています。  
+> - 今後ユーザー管理や認証を実装する際には、別途 `users` テーブルを追加する想定です。
+
+## ５．スイング12段階タグ
 
 | 順序 | 日本語ラベル | 自動タグ |
 |-----|-------------|---------|
@@ -116,38 +155,41 @@
 | 11 | フィニッシュ-2 | `finish_2` |
 | 12 | その他 | `other` |
 
-## 🚀 セットアップ手順
+## ６. 環境変数一覧
 
-### 1. 前提条件
-- Docker & Docker Compose インストール済み
-- OpenAI APIキー取得済み
+### `.env` の記載例（必須最小セット）
 
-### 2. 環境変数設定
-```bash
-# backend/.env を編集
-OPENAI_API_KEY=sk-your-openai-api-key-here
+```env
+# ---------- Database ----------
+DATABASE_URL=sqlite+aiosqlite:///./bbc_test.db
+# 例）mysql+asyncmy://user:pass@host:3306/bbc_test?charset=utf8mb4
 
-# Azure使用時 (オプション)
+# ---------- Storage ----------
 STORAGE_TYPE=azure_blob
-AZURE_STORAGE_CONNECTION_STRING=your-connection-string
+LOCAL_STORAGE_PATH=./uploads
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=blobeastasiafor9th;AccountKey=qIORKvLHjPnn87SNmpnrM8175L4C/5SCwZx/78SrqlBeNbcKoJ5LeaQ1nOlXPieoIexEP8zXpJvh+AStOZ1+Nw==;EndpointSuffix=core.windows.net
+AZURE_STORAGE_CONTAINER=bbc-test
+
+# ---------- OpenAI ----------
+OPENAI_API_KEY=sk-********************************
+
+# ---------- Dummy IDs (PoC 用) ----------
+DEFAULT_USER_ID=550e8400-e29b-41d4-a716-446655440000
+DEFAULT_COACH_ID=6ba7b810-9dad-11d1-80b4-00c04fd430c8
+
+
+（参考）コードで参照済み（.env.sample 未記載）のキー
+FFMPEG_PATH	ffmpeg	FFmpeg 実行パス
+| キー                | デフォルト    | 用途          |
+| ----------------- | -------- | ----------- |
+| `ALLOWED_ORIGINS` | `*`      | CORS 許可ドメイン |
+| `FFMPEG_PATH`     | `ffmpeg` | FFmpeg 実行パス |
+
 ```
 
-### 3. アプリケーション起動
-```bash
-# 開発環境起動 (バックエンド + フロントエンド)
-docker-compose up --build
 
-# プロダクション環境起動 (Nginx含む)
-docker-compose --profile production up --build
-```
 
-### 4. アクセス確認
-- **フロントエンド**: http://localhost:3000
-- **バックエンドAPI**: http://localhost:8000
-- **APIドキュメント**: http://localhost:8000/docs
-- **Nginx (本番用)**: http://localhost
-
-## 📝 API エンドポイント
+## ７．API エンドポイント
 
 ### アップロード系
 - `POST /api/v1/upload-video` - 動画アップロード
@@ -167,22 +209,7 @@ docker-compose --profile production up --build
 - `GET /api/v1/video/{video_id}/with-sections` - セクション付き動画取得
 - `GET /api/v1/video/{video_id}/feedback-summary` - フィードバック要約
 
-## 🎯 主要機能
-
-### ユーザー機能
-1. **動画アップロード** - ドラッグ&ドロップ対応
-2. **クラブ・スイング種類選択** - ドロップダウンメニュー
-3. **フィードバック閲覧** - セクション別表示
-4. **動画検索・フィルタ** - クラブ種類・フィードバック有無で絞込
-
-### コーチ機能
-1. **セクション分割** - 時間指定でスイングを分割
-2. **マークアップ画像** - 視覚的な指導画像追加
-3. **音声コメント** - Whisperで自動文字起こし
-4. **AI要約** - GPTによる自動要約生成
-5. **タグ付け** - 12段階スイングフェーズの自動判定
-
-## 🔧 設定オプション
+## ８．設定オプション
 
 ### ストレージ切り替え
 ```bash
@@ -204,8 +231,45 @@ DATABASE_URL=sqlite+aiosqlite:///./golf_coaching.db
 # Azure MySQL (本番用)
 DATABASE_URL=mysql+asyncmy://username:password@hostname:3306/database
 ```
+##　１０．アプリケーション起動
 
-## 🧪 テスト実行
+#### バックエンド（FastAPI）
+
+```bash
+# 1) 依存ライブラリのインストール（Python 3.9+、仮想環境推奨）
+cd backend
+python -m venv .venv
+source .venv/bin/activate          # Windows の場合: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2) 環境変数 .env を配置（backend/.env）
+#    OPENAI_API_KEY や DATABASE_URL などを設定済みであることを確認
+
+# 3) 開発サーバ起動
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# → API      : http://localhost:8000
+# → Swagger  : http://localhost:8000/docs
+
+#### 3.2 フロントエンド（Next.js）
+
+```bash
+# 1) 依存モジュールのインストール
+cd frontend
+npm install          # または pnpm install / yarn install
+
+# 2) 開発サーバ起動
+npm run dev
+
+# → ブラウザで http://localhost:3000 を開く
+```
+
+### アクセス確認
+- **フロントエンド**: http://localhost:3000
+- **バックエンドAPI**: http://localhost:8000
+- **APIドキュメント**: http://localhost:8000/docs
+- **Nginx (本番用)**: http://localhost
+## ９．テスト実行
 
 ```bash
 # バックエンドテスト
@@ -217,19 +281,15 @@ cd frontend
 npm run lint
 ```
 
-## 📈 今後の拡張予定
+## １１．今後の拡張について
 
-- [ ] ユーザー認証・権限管理
-- [ ] リアルタイム通知機能
-- [ ] 動画ストリーミング最適化
-- [ ] モバイルアプリ対応
-- [ ] コーチング予約システム連携
-
-## 🤝 開発チーム
-
-- **バックエンド**: FastAPI + AI機能担当
-- **フロントエンド**: 本格UI実装担当 (別チーム)
-- **インフラ**: Azure環境構築担当
+| 機能 | 推奨アーキテクチャ | 補足 |
+|------|------------------|------|
+| 認証・認可 | FastAPI‑Users + JWT（Access 5 min / Refresh 30 days） | `Depends(current_active_user)` をルーターに追加 |
+| Blob 表示時の保護 | 短命 SAS URL (15 分) + JWT で `/media-url` 再発行 | フロントで期限切れを検知し自動リフレッシュ |
+| LINE 連携 | LINE Messaging API + `line-bot-sdk-python` | コーチコメント保存完了時に Push |
+| **シーン別マークアップ画像** | フロント：Fabric.js などで円・直線描画 → `toBlob()`<br>バックエンド：`/add-section` で画像受信 → Blob 保存 | セクション row に `markup_image_url` 列追加 |
+| **アップロード時トリミング** | フロント：`@ffmpeg/ffmpeg` (WASM) or `MediaStreamRecorder` → 切り出し後アップロード<br>バックエンド：通常の `/upload-video` を流用 | クライアント側で処理するためサーバー負荷増なし |
 
 ## 📄 ライセンス
 
