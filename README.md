@@ -183,17 +183,6 @@ FFMPEG_PATH	ffmpeg	FFmpeg 実行パス
 | `FFMPEG_PATH`     | `ffmpeg` | FFmpeg 実行パス |
 
 
-### ストレージ切り替え
-```bash
-# ローカルストレージ (デフォルト)
-STORAGE_TYPE=local
-LOCAL_STORAGE_PATH=./uploads
-
-# Azure Blob Storage
-STORAGE_TYPE=azure_blob
-AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
-AZURE_STORAGE_CONTAINER=golf-videos
-```
 ### データベース切り替え
 ```bash
 # SQLite (開発用)
